@@ -151,6 +151,9 @@ func (s *Scanner) match(c rune) bool {
 }
 
 func (s *Scanner) peek() rune {
+	if s.isAtEnd() {
+		return 0
+	}
 	return s.source[s.current]
 }
 
@@ -179,6 +182,9 @@ func (s *Scanner) consumeBlockComment() {
 }
 
 func (s *Scanner) peekNext() rune {
+	if s.current+1 >= len(s.source) {
+		return 0
+	}
 	return s.source[s.current+1]
 }
 

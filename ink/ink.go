@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/hanzala211/goinkinterpreter/parser"
 	"github.com/hanzala211/goinkinterpreter/scanner"
+	"github.com/hanzala211/goinkinterpreter/token"
 )
 
 type Ink struct {
@@ -28,6 +30,13 @@ func (i *Ink) RunFile(file string) error {
 func (i *Ink) run(bytes []byte) {
 	scanner := scanner.NewScanner(string(bytes), i)
 	scanner.ScanTokens()
+	p := parser.NewParser(scanner.Tokens, i)
+	expr, err := p.Parse()
+	if err != nil {
+		i.ReportParserError(err.(parser.ParserError))
+		return
+	}
+	fmt.Println(expr.String())
 }
 
 func (i *Ink) ReportError(line int, err error) {
@@ -49,5 +58,13 @@ func (i *Ink) RunPrompt() {
 		line := input.Text()
 		i.run([]byte(line))
 		i.hadError = false
+	}
+}
+
+func (i *Ink) ReportParserError(err parser.ParserError) {
+	if err.Token.Type == token.TokenType_EOF {
+		i.report(err.Token.Line, " at end", err)
+	} else {
+		i.report(err.Token.Line, " at '"+err.Token.Lexeme+"'", err)
 	}
 }
