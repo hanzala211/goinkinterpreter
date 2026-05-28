@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-	ink := ink.Ink{}
+	ink := ink.NewInk()
 	if len(os.Args) > 2 {
 		fmt.Println("Usage: go run main.go <file>")
 		os.Exit(64)

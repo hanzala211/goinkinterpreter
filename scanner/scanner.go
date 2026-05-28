@@ -116,7 +116,7 @@ func (s *Scanner) scanToken() {
 		} else if s.isAlpha(c) {
 			s.scanIdentifier()
 		} else {
-			s.vm.ReportError(s.line, ErrUnexpectedRune)
+			return
 		}
 	}
 }
@@ -178,7 +178,6 @@ func (s *Scanner) consumeBlockComment() {
 			s.advance()
 		}
 	}
-	s.vm.ReportError(s.line, ErrUnindentedBlockComment)
 }
 
 func (s *Scanner) peekNext() rune {
@@ -197,7 +196,7 @@ func (s *Scanner) scanString() {
 	}
 
 	if s.isAtEnd() {
-		s.vm.ReportError(s.line, ErrUnterminatedString)
+		return
 	}
 
 	s.advance()
@@ -225,7 +224,6 @@ func (s *Scanner) scanNumber() {
 	value := string(s.source[s.start:s.current])
 	num, err := strconv.ParseFloat(value, 64)
 	if err != nil {
-		s.vm.ReportError(s.line, ErrInvalidNumber)
 		return
 	}
 	s.addTokenWithLiteral(token.TokenType_Number, num)

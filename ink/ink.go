@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/hanzala211/goinkinterpreter/evaluator"
 	"github.com/hanzala211/goinkinterpreter/parser"
 	"github.com/hanzala211/goinkinterpreter/scanner"
 	"github.com/hanzala211/goinkinterpreter/token"
@@ -12,6 +13,14 @@ import (
 
 type Ink struct {
 	hadError bool
+	eval     *evaluator.Evaluator
+}
+
+func NewInk() *Ink {
+	return &Ink{
+		hadError: false,
+		eval:     evaluator.NewEvaluator(),
+	}
 }
 
 func (i *Ink) RunFile(file string) error {
@@ -30,13 +39,20 @@ func (i *Ink) RunFile(file string) error {
 func (i *Ink) run(bytes []byte) {
 	scanner := scanner.NewScanner(string(bytes), i)
 	scanner.ScanTokens()
+	if i.hadError {
+		return
+	}
 	p := parser.NewParser(scanner.Tokens, i)
-	expr, err := p.Parse()
+	stmts, err := p.Parse()
 	if err != nil {
 		i.ReportParserError(err.(parser.ParserError))
 		return
 	}
-	fmt.Println(expr.String())
+	err = i.eval.Interpret(stmts)
+	if err != nil {
+		fmt.Println("Runtime Error:", err)
+		return
+	}
 }
 
 func (i *Ink) ReportError(line int, err error) {
@@ -63,7 +79,7 @@ func (i *Ink) RunPrompt() {
 
 func (i *Ink) ReportParserError(err parser.ParserError) {
 	if err.Token.Type == token.TokenType_EOF {
-		i.report(err.Token.Line, " at end", err)
+		i.report(err.Token.Line, "at end", err)
 	} else {
 		i.report(err.Token.Line, " at '"+err.Token.Lexeme+"'", err)
 	}

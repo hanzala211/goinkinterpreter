@@ -2,6 +2,7 @@ package parser
 
 import (
 	"github.com/hanzala211/goinkinterpreter/expr"
+	"github.com/hanzala211/goinkinterpreter/stmt"
 	"github.com/hanzala211/goinkinterpreter/token"
 )
 
@@ -32,12 +33,170 @@ func NewParser(tokens []*token.Token, vm vm) *Parser {
 	}
 }
 
-func (p *Parser) Parse() (expr.Expr, error) {
-	return p.expression()
+func (p *Parser) Parse() ([]stmt.Stmt, error) {
+	var stmts []stmt.Stmt
+	for !p.isAtEnd() {
+		stmt, err := p.declaration()
+		if err != nil {
+			return nil, err
+		}
+		stmts = append(stmts, stmt)
+	}
+	return stmts, nil
+}
+
+func (p *Parser) declaration() (stmt.Stmt, error) {
+	if p.match(token.TokenType_Var) {
+		return p.varDeclaration()
+	}
+	return p.statement()
+}
+
+func (p *Parser) varDeclaration() (stmt.Stmt, error) {
+	name, err := p.consume(token.TokenType_Identifier, "Expected variable name")
+	if err != nil {
+		return nil, err
+	}
+	var initializer expr.Expr
+	if p.match(token.TokenType_Equal) {
+		initializer, err = p.expression()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	_, err = p.consume(token.TokenType_Semicolon, "Expected ';' after variable declaration")
+	if err != nil {
+		return nil, err
+	}
+	return &stmt.VarStmt{
+		Name:       name,
+		Initalizer: initializer,
+	}, nil
+}
+
+func (p *Parser) statement() (stmt.Stmt, error) {
+	if p.match(token.TokenType_Print) {
+		return p.printStatement()
+	} else if p.match(token.TokenType_LeftBrace) {
+		return p.blockStatement()
+	}
+	return p.expressionStatement()
+}
+
+func (p *Parser) blockStatement() (stmt.Stmt, error) {
+	var statements []stmt.Stmt
+	for !p.check(token.TokenType_RightBrace) && !p.isAtEnd() {
+		stmt, err := p.declaration()
+		if err != nil {
+			return nil, err
+		}
+		statements = append(statements, stmt)
+	}
+	_, err := p.consume(token.TokenType_RightBrace, "Expected '}' after block")
+	if err != nil {
+		return nil, err
+	}
+	return &stmt.BlockStmt{
+		Statements: statements,
+	}, nil
+}
+
+func (p *Parser) printStatement() (stmt.Stmt, error) {
+	value, err := p.expression()
+	if err != nil {
+		return nil, err
+	}
+	_, err = p.consume(token.TokenType_Semicolon, "Expected ';' after print statement")
+	if err != nil {
+		return nil, err
+	}
+	return &stmt.PrintStmt{
+		Expr: value,
+	}, nil
+}
+
+func (p *Parser) expressionStatement() (stmt.Stmt, error) {
+	ex, err := p.expression()
+	if err != nil {
+		return nil, err
+	}
+	_, err = p.consume(token.TokenType_Semicolon, "Expected ';' after expression statement")
+	if err != nil {
+		return nil, err
+	}
+	return &stmt.ExprStmt{
+		Expr: ex,
+	}, nil
 }
 
 func (p *Parser) expression() (expr.Expr, error) {
-	return p.equality()
+	return p.assignment()
+}
+
+func (p *Parser) assignment() (expr.Expr, error) {
+	ex, err := p.or()
+	if err != nil {
+		return ex, err
+	}
+	if p.match(token.TokenType_Equal) {
+		equals := p.previous()
+		value, err := p.assignment()
+		if err != nil {
+			return value, err
+		}
+		if _, ok := ex.(*expr.VarExpr); ok {
+			return &expr.AssignExpr{
+				Name:  ex.(*expr.VarExpr).Name,
+				Value: value,
+			}, nil
+		}
+		return nil, ParserError{
+			Token:   equals,
+			Message: "invalid assignment target",
+		}
+	}
+	return ex, nil
+}
+
+func (p *Parser) or() (expr.Expr, error) {
+	ex, err := p.and()
+	if err != nil {
+		return ex, err
+	}
+	for p.match(token.TokenType_Or) {
+		operator := p.previous()
+		right, err := p.and()
+		if err != nil {
+			return right, err
+		}
+		ex = &expr.LogicalExpr{
+			Left:     ex,
+			Operator: operator,
+			Right:    right,
+		}
+	}
+	return ex, nil
+}
+
+func (p *Parser) and() (expr.Expr, error) {
+	ex, err := p.equality()
+	if err != nil {
+		return ex, err
+	}
+	for p.match(token.TokenType_And) {
+		operator := p.previous()
+		right, err := p.equality()
+		if err != nil {
+			return right, err
+		}
+		ex = &expr.LogicalExpr{
+			Left:     ex,
+			Operator: operator,
+			Right:    right,
+		}
+	}
+	return ex, nil
 }
 
 func (p *Parser) equality() (expr.Expr, error) {
@@ -127,7 +286,7 @@ func (p *Parser) unary() (expr.Expr, error) {
 		if err != nil {
 			return ex, err
 		}
-		return expr.UnaryExpr{
+		return &expr.UnaryExpr{
 			Operator: operator,
 			Right:    ex,
 		}, nil
@@ -137,28 +296,33 @@ func (p *Parser) unary() (expr.Expr, error) {
 
 func (p *Parser) primary() (expr.Expr, error) {
 	if p.match(token.TokenType_False) {
-		return expr.LiteralExpr{
+		return &expr.LiteralExpr{
 			Value: false,
 		}, nil
 	}
 	if p.match(token.TokenType_True) {
-		return expr.LiteralExpr{
+		return &expr.LiteralExpr{
 			Value: true,
 		}, nil
 	}
 	if p.match(token.TokenType_Number) {
-		return expr.LiteralExpr{
+		return &expr.LiteralExpr{
 			Value: p.previous().Literal,
 		}, nil
 	}
 	if p.match(token.TokenType_String) {
-		return expr.LiteralExpr{
+		return &expr.LiteralExpr{
 			Value: p.previous().Literal,
 		}, nil
 	}
 	if p.match(token.TokenType_Nil) {
-		return expr.LiteralExpr{
+		return &expr.LiteralExpr{
 			Value: nil,
+		}, nil
+	}
+	if p.match(token.TokenType_Identifier) {
+		return &expr.VarExpr{
+			Name: p.previous(),
 		}, nil
 	}
 	if p.match(token.TokenType_LeftParen) {
@@ -170,7 +334,7 @@ func (p *Parser) primary() (expr.Expr, error) {
 		if err != nil {
 			return nil, err
 		}
-		return expr.Grouping{
+		return &expr.Grouping{
 			Expression: ex,
 		}, nil
 	}

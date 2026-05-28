@@ -31,6 +31,33 @@ type Grouping struct {
 	Expression Expr
 }
 
+type VarExpr struct {
+	Name *token.Token
+}
+
+type AssignExpr struct {
+	Name  *token.Token
+	Value Expr
+}
+
+type LogicalExpr struct {
+	Left     Expr
+	Operator *token.Token
+	Right    Expr
+}
+
+func (l LogicalExpr) String() string {
+	return paranthesized(l.Operator.Lexeme, l.Left, l.Right)
+}
+
+func (a AssignExpr) String() string {
+	return fmt.Sprintf("%s = %v", a.Name.Lexeme, a.Value)
+}
+
+func (v VarExpr) String() string {
+	return v.Name.Lexeme
+}
+
 func paranthesized(name string, expr ...Expr) string {
 	var builder strings.Builder
 	builder.WriteRune('(')
@@ -71,5 +98,8 @@ func (l LiteralExpr) String() string {
 
 func (e BinaryExpr) exprNode()  {}
 func (u UnaryExpr) exprNode()   {}
+func (v VarExpr) exprNode()     {}
+func (a AssignExpr) exprNode()  {}
 func (l LiteralExpr) exprNode() {}
+func (l LogicalExpr) exprNode() {}
 func (g Grouping) exprNode()    {}
