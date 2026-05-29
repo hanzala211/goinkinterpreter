@@ -1,0 +1,27 @@
+// 1. A function that creates and returns another function
+fun createBankAccount(initialBalance) {
+    var balance = initialBalance;
+
+    // This internal function remembers the 'balance' variable!
+    fun deposit(amount) {
+        balance = balance + amount;
+        return balance;
+    }
+
+    return deposit;
+}
+
+print "--- Testing Closures & Memory Isolation ---";
+
+// 2. Create two entirely separate accounts
+var accountA = createBankAccount(100);
+var accountB = createBankAccount(500);
+
+print "Account A deposits 50:";
+print accountA(50);   // Should print 150
+
+print "Account B deposits 20:";
+print accountB(20);   // Should print 520
+
+print "Account A deposits 100:";
+print accountA(100);  // Should print 250 (Proves Account A's memory is persistent and isolated!)

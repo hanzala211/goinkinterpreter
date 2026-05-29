@@ -95,7 +95,7 @@ func (ev *Evaluator) execute(statement stmt.Stmt) error {
 		fmt.Println(value)
 		return nil
 	case *stmt.BlockStmt:
-		err := ev.executeBlock(s.Statements, ev.env)
+		err := ev.executeBlock(s.Statements, NewEnvironment(ev.env))
 		return err
 	case *stmt.IfStmt:
 		condition, err := ev.Eval(s.Condition)

@@ -6,10 +6,18 @@ fun fib(n) {
 }
 
 var result = fib(6);
+print "Recursive Fib(6):";
 print result;
+
+print "---";
+
 var a = 1;
 var b = 2;
+print "Math (a + b):";
 print a + b;
+
+print "---";
+print "For Loop Test:";
 
 for (var i = 0; i < 10; i = i + 1) {
     print i;
