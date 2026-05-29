@@ -10,7 +10,7 @@ import (
 func main() {
 	ink := ink.NewInk()
 	if len(os.Args) > 2 {
-		fmt.Println("Usage: go run main.go <file>")
+		fmt.Println("Usage: goinkinterpreter <file>")
 		os.Exit(64)
 	}
 	if len(os.Args) == 2 {
