@@ -1,0 +1,16 @@
+fun fib(n) {
+    if (n < 2) {
+        return n;
+    }
+    return fib(n - 1) + fib(n - 2);
+}
+
+var result = fib(6);
+print result;
+var a = 1;
+var b = 2;
+print a + b;
+
+for (var i = 0; i < 10; i = i + 1) {
+    print i;
+}
