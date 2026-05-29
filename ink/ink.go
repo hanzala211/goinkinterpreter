@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/hanzala211/goinkinterpreter/evaluator"
 	"github.com/hanzala211/goinkinterpreter/parser"
@@ -25,6 +26,9 @@ func NewInk() *Ink {
 
 func (i *Ink) RunFile(file string) error {
 	bytes, err := os.ReadFile(file)
+	if filepath.Ext(file) != ".goink" {
+		return fmt.Errorf("file must have .goink extension")
+	}
 	if err != nil {
 		return err
 	}

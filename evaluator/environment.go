@@ -5,14 +5,7 @@ type Environment struct {
 	parent *Environment
 }
 
-func NewEnvironment() *Environment {
-	return &Environment{
-		values: make(map[string]any),
-		parent: nil,
-	}
-}
-
-func NewEnvironmentWithParent(parent *Environment) *Environment {
+func NewEnvironment(parent *Environment) *Environment {
 	return &Environment{
 		values: make(map[string]any),
 		parent: parent,
@@ -29,9 +22,11 @@ func (e *Environment) Set(name string, value any) {
 func (e *Environment) Assign(name string, newValue any) {
 	if _, ok := e.values[name]; ok {
 		e.values[name] = newValue
+		return
 	}
 	if e.parent != nil {
 		e.parent.Assign(name, newValue)
+		return
 	}
 	panic("variable does not exist")
 }

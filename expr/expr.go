@@ -46,6 +46,16 @@ type LogicalExpr struct {
 	Right    Expr
 }
 
+type CallExpr struct {
+	Callee Expr
+	Paren  *token.Token
+	Args   []Expr
+}
+
+func (c CallExpr) String() string {
+	return paranthesized("call", c.Callee)
+}
+
 func (l LogicalExpr) String() string {
 	return paranthesized(l.Operator.Lexeme, l.Left, l.Right)
 }
@@ -103,3 +113,4 @@ func (a AssignExpr) exprNode()  {}
 func (l LiteralExpr) exprNode() {}
 func (l LogicalExpr) exprNode() {}
 func (g Grouping) exprNode()    {}
+func (c CallExpr) exprNode()    {}

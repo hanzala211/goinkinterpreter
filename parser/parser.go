@@ -49,7 +49,57 @@ func (p *Parser) declaration() (stmt.Stmt, error) {
 	if p.match(token.TokenType_Var) {
 		return p.varDeclaration()
 	}
+	if p.match(token.TokenType_Fun) {
+		return p.functionDeclaration("function")
+	}
 	return p.statement()
+}
+
+func (p *Parser) functionDeclaration(keyword string) (stmt.Stmt, error) {
+	name, err := p.consume(token.TokenType_Identifier, "Expect "+keyword+" name.")
+	if err != nil {
+		return nil, err
+	}
+	_, err = p.consume(token.TokenType_LeftParen, "Expect '(' after "+keyword+" name.")
+	if err != nil {
+		return nil, err
+	}
+	var params []*token.Token
+	for !p.check(token.TokenType_RightParen) {
+		for {
+			param, err := p.consume(token.TokenType_Identifier, "Expect parameter name.")
+			if err != nil {
+				return nil, err
+			}
+			params = append(params, param)
+			if len(params) >= 255 {
+				return nil, ParserError{
+					Token:   p.peek(),
+					Message: "Maximum number of parameters exceeded.",
+				}
+			}
+			if !p.match(token.TokenType_Comma) {
+				break
+			}
+		}
+	}
+	_, err = p.consume(token.TokenType_RightParen, "Expect ')' after parameters.")
+	if err != nil {
+		return nil, err
+	}
+	_, err = p.consume(token.TokenType_LeftBrace, "Expect '{' before function body.")
+	if err != nil {
+		return nil, err
+	}
+	body, err := p.blockStatement()
+	if err != nil {
+		return nil, err
+	}
+	return &stmt.FuncStmt{
+		Name:   name,
+		Params: params,
+		Body:   body.(*stmt.BlockStmt).Statements,
+	}, nil
 }
 
 func (p *Parser) varDeclaration() (stmt.Stmt, error) {
@@ -59,7 +109,7 @@ func (p *Parser) varDeclaration() (stmt.Stmt, error) {
 	}
 	var initializer expr.Expr
 	if p.match(token.TokenType_Equal) {
-		initializer, err = p.expression()
+		initializer, err = p.expression() // this is the right side of the equal
 		if err != nil {
 			return nil, err
 		}
@@ -80,8 +130,164 @@ func (p *Parser) statement() (stmt.Stmt, error) {
 		return p.printStatement()
 	} else if p.match(token.TokenType_LeftBrace) {
 		return p.blockStatement()
+	} else if p.match(token.TokenType_If) {
+		return p.ifStatement()
+	} else if p.match(token.TokenType_While) {
+		return p.whileStatement()
+	} else if p.match(token.TokenType_For) {
+		return p.forStatement()
+	} else if p.match(token.TokenType_Return) {
+		return p.returnStatement()
 	}
 	return p.expressionStatement()
+}
+
+func (p *Parser) returnStatement() (stmt.Stmt, error) {
+	keyword := p.previous()
+	var value expr.Expr = nil
+	if !p.check(token.TokenType_Semicolon) {
+		var err error
+		value, err = p.expression()
+		if err != nil {
+			return nil, err
+		}
+	}
+	_, err := p.consume(token.TokenType_Semicolon, "Expected ';' after return statement")
+	if err != nil {
+		return nil, err
+	}
+	return &stmt.ReturnStmt{
+		Keyword: keyword,
+		Value:   value,
+	}, nil
+}
+
+func (p *Parser) forStatement() (stmt.Stmt, error) {
+	_, err := p.consume(token.TokenType_LeftParen, "Expected '(' after 'for'")
+	if err != nil {
+		return nil, err
+	}
+	var initializer stmt.Stmt
+	if p.match(token.TokenType_Semicolon) { // No initializer e.g for (; ...)
+		initializer = nil
+	} else if p.match(token.TokenType_Var) { // e.g for (var ...)
+		initializer, err = p.varDeclaration()
+	} else { // e.g for (i = 0...)
+		initializer, err = p.expressionStatement()
+	}
+	if err != nil {
+		return nil, err
+	}
+	var condition expr.Expr = nil
+	if !p.check(token.TokenType_Semicolon) { // for checking if there is a condition e.g for (var i = 0; i < 10; ...) if not then skip fetching the condition
+		condition, err = p.expression()
+		if err != nil {
+			return nil, err
+		}
+	}
+	_, err = p.consume(token.TokenType_Semicolon, "Expected ';' after for condition")
+	if err != nil {
+		return nil, err
+	}
+	var increment expr.Expr = nil
+	if !p.check(token.TokenType_RightParen) {
+		increment, err = p.expression()
+		if err != nil {
+			return nil, err
+		}
+	}
+	_, err = p.consume(token.TokenType_RightParen, "Expected ')' after for increment")
+	if err != nil {
+		return nil, err
+	}
+	body, err := p.statement()
+	if err != nil {
+		return nil, err
+	}
+	if increment != nil {
+		body = &stmt.BlockStmt{
+			Statements: []stmt.Stmt{
+				body,
+				&stmt.ExprStmt{
+					Expr: increment,
+				},
+			},
+		}
+	}
+	if condition == nil {
+		condition = &expr.LiteralExpr{
+			Value: true,
+		}
+	}
+	body = &stmt.WhileStmt{
+		Condition: condition,
+		Body:      body,
+	}
+	if initializer != nil {
+		body = &stmt.BlockStmt{
+			Statements: []stmt.Stmt{
+				initializer,
+				body,
+			},
+		}
+	}
+	return body, nil
+}
+
+func (p *Parser) whileStatement() (stmt.Stmt, error) {
+	_, err := p.consume(token.TokenType_LeftParen, "Expected '(' after 'while'")
+	if err != nil {
+		return nil, err
+	}
+	condition, err := p.expression()
+	if err != nil {
+		return nil, err
+	}
+	_, err = p.consume(token.TokenType_RightParen, "Expected ')' after 'while' condition")
+	if err != nil {
+		return nil, err
+	}
+	body, err := p.statement()
+	if err != nil {
+		return nil, err
+	}
+
+	return &stmt.WhileStmt{
+		Condition: condition,
+		Body:      body,
+	}, nil
+}
+
+func (p *Parser) ifStatement() (stmt.Stmt, error) {
+	_, err := p.consume(token.TokenType_LeftParen, "Expected '(' after 'if'")
+	if err != nil {
+		return nil, err
+	}
+	condition, err := p.expression()
+	if err != nil {
+		return nil, err
+	}
+	_, err = p.consume(token.TokenType_RightParen, "Expected ')' after 'if' condition")
+	if err != nil {
+		return nil, err
+	}
+	thenStmt, err := p.statement() // this is called for block stmt and what it does that it allows one liner if we wanted only braces if control flow we would call p.blockStatement()
+	if err != nil {
+		return nil, err
+	}
+	var elseStmt stmt.Stmt
+	if p.match(token.TokenType_Else) {
+		elseStmt, err = p.statement()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &stmt.IfStmt{
+		Condition: condition,
+		Then:      thenStmt,
+		Else:      elseStmt,
+	}, nil
 }
 
 func (p *Parser) blockStatement() (stmt.Stmt, error) {
@@ -291,7 +497,56 @@ func (p *Parser) unary() (expr.Expr, error) {
 			Right:    ex,
 		}, nil
 	}
-	return p.primary()
+	return p.call()
+}
+
+func (p *Parser) call() (expr.Expr, error) {
+	ex, err := p.primary()
+	if err != nil {
+		return nil, err
+	}
+	for {
+		if p.match(token.TokenType_LeftParen) {
+			ex, err = p.finishCall(ex)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			break
+		}
+	}
+	return ex, nil
+}
+
+func (p *Parser) finishCall(callee expr.Expr) (expr.Expr, error) {
+	var arguments []expr.Expr
+	if !p.check(token.TokenType_RightParen) {
+		for {
+			arg, err := p.expression()
+			if err != nil {
+				return nil, err
+			}
+			arguments = append(arguments, arg)
+
+			if len(arguments) >= 255 {
+				return nil, ParserError{Token: p.peek(), Message: "Can't have more than 255 arguments."}
+			}
+			if !p.match(token.TokenType_Comma) {
+				break
+			}
+		}
+	}
+
+	paren, err := p.consume(token.TokenType_RightParen, "Expect ')' after arguments.")
+	if err != nil {
+		return nil, err
+	}
+
+	return &expr.CallExpr{
+		Callee: callee,
+		Paren:  paren,
+		Args:   arguments,
+	}, nil
 }
 
 func (p *Parser) primary() (expr.Expr, error) {

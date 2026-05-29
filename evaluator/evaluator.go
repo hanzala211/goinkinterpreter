@@ -12,9 +12,52 @@ type Evaluator struct {
 	env *Environment
 }
 
+type InkCallable interface {
+	Call(ev *Evaluator, args []any) (any, error)
+	Arity() int
+}
+
+type ReturnError struct {
+	Value any
+}
+
+func (e *ReturnError) Error() string {
+	return "return"
+}
+
+type InkFunc struct {
+	Declaration *stmt.FuncStmt
+	Closure     *Environment
+}
+
+func (f *InkFunc) Arity() int {
+	return len(f.Declaration.Params)
+}
+
+func (f *InkFunc) Call(ev *Evaluator, arguments []any) (any, error) {
+	// 1. Create a brand new memory scope for the function
+	environment := NewEnvironment(f.Closure)
+
+	// 2. Bind all the arguments to the parameter names
+	for i, param := range f.Declaration.Params {
+		environment.Set(param.Lexeme, arguments[i])
+	}
+
+	// 3. Execute the body block in this new environment
+	// (Assuming your evaluator has a method to execute a slice of statements in a specific env)
+	err := ev.executeBlock(f.Declaration.Body, environment)
+	// 4. Catch the return value if the user triggered a ReturnStmt
+	if retErr, ok := err.(*ReturnError); ok {
+		return retErr.Value, nil
+	}
+
+	// If it wasn't a return error, pass the real error up (or nil if successful)
+	return nil, err
+}
+
 func NewEvaluator() *Evaluator {
 	return &Evaluator{
-		env: NewEnvironment(),
+		env: NewEnvironment(nil),
 	}
 }
 
@@ -52,17 +95,54 @@ func (ev *Evaluator) execute(statement stmt.Stmt) error {
 		fmt.Println(value)
 		return nil
 	case *stmt.BlockStmt:
-		oldEnv := ev.env
-		ev.env = NewEnvironmentWithParent(oldEnv)
-		for _, stmt := range s.Statements {
-			err := ev.execute(stmt)
+		err := ev.executeBlock(s.Statements, ev.env)
+		return err
+	case *stmt.IfStmt:
+		condition, err := ev.Eval(s.Condition)
+		if err != nil {
+			return err
+		}
+		if isTruthy(condition) {
+			return ev.execute(s.Then)
+		}
+		if s.Else != nil {
+			return ev.execute(s.Else)
+		}
+		return nil
+	case *stmt.WhileStmt:
+		for {
+			condition, err := ev.Eval(s.Condition)
 			if err != nil {
-				ev.env = oldEnv
+				return err
+			}
+			if !isTruthy(condition) {
+				break
+			}
+			err = ev.execute(s.Body)
+			if err != nil {
 				return err
 			}
 		}
-		ev.env = oldEnv
 		return nil
+	case *stmt.FuncStmt:
+		inkFunc := &InkFunc{
+			Declaration: s,
+			Closure:     ev.env,
+		}
+		ev.env.Set(s.Name.Lexeme, inkFunc)
+		return nil
+	case *stmt.ReturnStmt:
+		var value any = nil
+		if s.Value != nil {
+			var err error
+			value, err = ev.Eval(s.Value)
+			if err != nil {
+				return err
+			}
+		}
+		return &ReturnError{
+			Value: value,
+		}
 	}
 	return nil
 }
@@ -190,6 +270,36 @@ func (ev *Evaluator) Eval(e expr.Expr) (any, error) {
 			}
 		}
 		return ev.Eval(e.Right)
+	case *expr.CallExpr:
+		// 1. Evaluate the identifier (looks up the function in memory)
+		callee, err := ev.Eval(e.Callee)
+		if err != nil {
+			return nil, err
+		}
+
+		// 2. Evaluate all the arguments
+		var arguments []any
+		for _, argExpr := range e.Args {
+			argValue, err := ev.Eval(argExpr)
+			if err != nil {
+				return nil, err
+			}
+			arguments = append(arguments, argValue)
+		}
+
+		// 3. Ensure the thing we pulled from memory is actually a function
+		function, ok := callee.(InkCallable)
+		if !ok {
+			return nil, fmt.Errorf("can only call functions and classes")
+		}
+
+		// 4. Ensure the Arity matches
+		if len(arguments) != function.Arity() {
+			return nil, fmt.Errorf("expected %d arguments but got %d", function.Arity(), len(arguments))
+		}
+
+		// 5. Fire the Call!
+		return function.Call(ev, arguments)
 	}
 	return nil, nil
 }
@@ -202,4 +312,18 @@ func isTruthy(value any) bool {
 		return b
 	}
 	return true
+}
+
+func (ev *Evaluator) executeBlock(stmts []stmt.Stmt, env *Environment) error {
+	oldEnv := ev.env
+	ev.env = env
+	for _, stmt := range stmts {
+		err := ev.execute(stmt)
+		if err != nil {
+			ev.env = oldEnv
+			return err
+		}
+	}
+	ev.env = oldEnv
+	return nil
 }

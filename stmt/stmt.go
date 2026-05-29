@@ -26,7 +26,33 @@ type BlockStmt struct {
 	Statements []Stmt
 }
 
-func (e *ExprStmt) stmtNode()  {}
-func (v *VarStmt) stmtNode()   {}
-func (p *PrintStmt) stmtNode() {}
-func (b *BlockStmt) stmtNode() {}
+type IfStmt struct {
+	Condition expr.Expr
+	Then      Stmt
+	Else      Stmt
+}
+
+type WhileStmt struct {
+	Condition expr.Expr
+	Body      Stmt
+}
+
+type FuncStmt struct {
+	Name   *token.Token
+	Params []*token.Token
+	Body   []Stmt
+}
+
+type ReturnStmt struct {
+	Keyword *token.Token
+	Value   expr.Expr
+}
+
+func (e *ExprStmt) stmtNode()   {}
+func (w *WhileStmt) stmtNode()  {}
+func (i *IfStmt) stmtNode()     {}
+func (v *VarStmt) stmtNode()    {}
+func (p *PrintStmt) stmtNode()  {}
+func (b *BlockStmt) stmtNode()  {}
+func (f *FuncStmt) stmtNode()   {}
+func (r *ReturnStmt) stmtNode() {}
