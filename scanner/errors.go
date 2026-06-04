@@ -10,4 +10,3 @@ var (
 	ErrUnterminatedString     = errors.New("Unterminated string.")
 	ErrInvalidNumber          = errors.New("Invalid number.")
 )
-

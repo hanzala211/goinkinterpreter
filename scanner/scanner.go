@@ -165,17 +165,12 @@ func (s *Scanner) consumeLineComment() {
 
 func (s *Scanner) consumeBlockComment() {
 	for !s.isAtEnd() {
-		switch c := s.advance(); c {
-		case '*':
-			if s.peekNext() == '/' {
-				s.current += 2
-				return
-			}
-		case '\n':
+		c := s.advance()
+		if c == '*' && s.match('/') {
+			return
+		}
+		if c == '\n' {
 			s.line++
-			s.advance()
-		default:
-			s.advance()
 		}
 	}
 }
